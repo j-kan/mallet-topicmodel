@@ -16,9 +16,10 @@ import java.util.Arrays;
 import cc.mallet.classify.MaxEnt;
 import cc.mallet.optimize.LimitedMemoryBFGS;
 import cc.mallet.optimize.OptimizationException;
+import cc.mallet.optimize.Optimizer;
+import cc.mallet.optimize.StochasticMetaAscent;
 import cc.mallet.pipe.Noop;
 import cc.mallet.pipe.Pipe;
-import cc.mallet.topics.DMROptimizable;
 import cc.mallet.types.FeatureCounter;
 import cc.mallet.types.FeatureVector;
 import cc.mallet.types.Instance;
@@ -40,11 +41,52 @@ public class DMRTopicModel extends ParallelTopicModel {
 	double[][] alphaCache;
     double[] alphaSumCache;
 
+    boolean useStochasticMetaAscent = true;
+    int     numBatches              = 4;
+    double  initialStep             = 0.002;
+    double  metaStep                = 0.005;
+    
+
 	public DMRTopicModel(int numberOfTopics) {
 		super(numberOfTopics);
 	}
 
-	
+    /**
+         @param useStochasticMetaAscent 
+                     if true, use {@link StochasticMetaAscent} 
+                     instead of {@link LimitedMemoryBFGS} to optimize
+     **/
+    public void setUseStochasticMetaAscent(boolean useStochasticMetaAscent) {
+        this.useStochasticMetaAscent = useStochasticMetaAscent;
+        if (!useStochasticMetaAscent)
+            this.numBatches = 1;    // L-BFGS is not batched
+    }
+
+    /**
+         @param numBatches  number of batches for {@link StochasticMetaAscent}
+     **/
+    public void setNumBatches(int numBatches) {
+        this.numBatches              = numBatches;
+        this.useStochasticMetaAscent = true;
+    }
+    
+    /**
+         @param initialStep  initial step parameter for {@link StochasticMetaAscent}
+         @see StochasticMetaAscent#setInitialStep(double)
+     **/
+    public void setInitialStep(double initialStep) {
+        this.initialStep = initialStep;
+    }
+    
+    /**
+         @param metaStep    mu parameter for {@link StochasticMetaAscent}
+         @see StochasticMetaAscent#setMu(double)
+     **/
+    public void setMetaStep(double metaStep) {
+        this.metaStep = metaStep;
+    }
+    
+    
 	@Override
 	public void addInstances(InstanceList training) {
 
@@ -131,11 +173,11 @@ public class DMRTopicModel extends ParallelTopicModel {
             parameterInstances.add( new Instance(ta.instance.getTarget(), counter.toFeatureVector(), null, null) );
         }
 
-        DMROptimizable optimizable = new DMROptimizable(parameterInstances, dmrParameters);
+        DMROptimizable optimizable = new DMROptimizable(parameterInstances, this.numBatches, this.dmrParameters);
         optimizable.setRegularGaussianPriorVariance(0.5);
         optimizable.setInterceptGaussianPriorVariance(100.0);
 
-		LimitedMemoryBFGS optimizer = new LimitedMemoryBFGS(optimizable);
+        Optimizer optimizer = makeOptimizer(optimizable);
 
 		// Optimize once
 		try {
@@ -153,6 +195,28 @@ public class DMRTopicModel extends ParallelTopicModel {
         dmrParameters = optimizable.getClassifier();
 
         cacheAlphas();
+    }
+
+    /**
+         @param optimizable
+         @param optimizer
+         @return
+     **/
+    private Optimizer makeOptimizer(DMROptimizable optimizable)
+    {
+        if (this.useStochasticMetaAscent)
+        {
+            StochasticMetaOptimizer optimizer = new StochasticMetaOptimizer(optimizable, this.numBatches, this.makeRandom());
+
+            optimizer.setInitialStep(this.initialStep);
+            optimizer.setMu(this.metaStep);
+            
+            return optimizer;
+        }
+        else
+        {
+            return new LimitedMemoryBFGS(optimizable);
+        }
     }
 
 
