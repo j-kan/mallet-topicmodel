@@ -206,7 +206,7 @@ public class DMRTopicModel extends ParallelTopicModel {
     {
         if (this.useStochasticMetaAscent)
         {
-            StochasticMetaOptimizer optimizer = new StochasticMetaOptimizer(optimizable, this.numBatches, this.makeRandom());
+            StochasticMetaOptimizer optimizer = new StochasticMetaOptimizer(optimizable, this.numBatches, optimizable.trainingList.size(), this.makeRandom());
 
             optimizer.setInitialStep(this.initialStep);
             optimizer.setMu(this.metaStep);

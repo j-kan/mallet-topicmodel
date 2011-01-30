@@ -36,7 +36,7 @@ public class DMROptimizable implements Optimizable.ByBatchGradient, Optimizable.
      // The result is an Optimizable function.
     
     private static Logger logger = MalletLogger.getLogger(DMROptimizable.class.getName());
-    private static Logger progressLogger = MalletProgressMessageLogger.getLogger(DMROptimizable.class.getName()+"-pl");
+    private static Logger progressLogger = MalletLogger.getLogger(DMROptimizable.class.getName()+"-pl");
 
     MaxEnt                classifier;
     InstanceList          trainingList;
@@ -68,11 +68,13 @@ public class DMROptimizable implements Optimizable.ByBatchGradient, Optimizable.
     
     static class Cache {
         // The expectations are (temporarily) stored in the cachedGradient
-        double[]              cachedGradient;
+        double[]              cachedGradient; 
+                                    // this cached gradient seems always to be stale in both L-BFGS and SMA
+                                    //  but it saves us from reallocating this array with every iteration
 
         double                cachedValue;
         boolean               cachedValueStale;
-        boolean               cachedGradientStale;
+        //boolean               cachedGradientStale;
         
         public Cache(int numLabels, int numFeatures) {
             this.cachedGradient = new double [numLabels * numFeatures];
@@ -80,8 +82,9 @@ public class DMROptimizable implements Optimizable.ByBatchGradient, Optimizable.
         }
         
         public void invalidate() {
+            logger.fine("invalidate cache");
             cachedValueStale    = true;
-            cachedGradientStale = true;
+            //cachedGradientStale = true;
         }
     }
   
@@ -105,7 +108,7 @@ public class DMROptimizable implements Optimizable.ByBatchGradient, Optimizable.
         // Add one feature for the "default feature".
         this.numFeatures = alphabet.size() + 1; // add a spot for the intercept term
         
-        System.out.println("num features: " + numFeatures + " numLabels: " + numLabels);
+        logger.info("num features: " + numFeatures + " numLabels: " + numLabels);
 
         this.defaultFeatureIndex = numFeatures - 1;
 
@@ -226,12 +229,12 @@ public class DMROptimizable implements Optimizable.ByBatchGradient, Optimizable.
         
         Cache c = this.cache[batchIndex];
         
+        logger.fine("getBatchValue[" + batchIndex + "]: " + c.cachedValueStale);
+
         if (! c.cachedValueStale) { 
             return c.cachedValue; 
         }
         
-        System.out.println(this.getClass().getSimpleName() + ": batch " + batchIndex);
-
         numGetValueCalls++;
 		c.cachedValue = 0;
 
@@ -336,9 +339,9 @@ public class DMROptimizable implements Optimizable.ByBatchGradient, Optimizable.
 		double labelProbability = c.cachedValue;
 		c.cachedValue += prior;
 		c.cachedValueStale = false;
-		progressLogger.info ("Value (likelihood=" + formatter.format(labelProbability) +
-							 " prior=" + formatter.format(prior) +
-							 ") = " + formatter.format(c.cachedValue));
+		progressLogger.info ("Value["+batchIndex+"] (likelihood=" + formatter.format(labelProbability) +
+							     " prior=" + formatter.format(prior) +
+							     ") = " + formatter.format(c.cachedValue));
 
 		return c.cachedValue;
     }
@@ -426,6 +429,8 @@ public class DMROptimizable implements Optimizable.ByBatchGradient, Optimizable.
     public void getBatchValueGradient(double[] buffer, int batchIndex, int[] batchAssignments)
     {
         Cache c = this.cache[batchIndex];
+
+        logger.fine("getBatchValueGradient[" + batchIndex + "]");
 
         MatrixOps.setAll (c.cachedGradient, 0.0);
 

@@ -9,6 +9,7 @@ package edu.umass.cs.mallet.users.kan.topics;
 
 import java.util.Random;
 
+import cc.mallet.optimize.Optimizable;
 import cc.mallet.optimize.Optimizer;
 import cc.mallet.optimize.StochasticMetaAscent;
 
@@ -23,21 +24,21 @@ import cc.mallet.optimize.StochasticMetaAscent;
  **/
 public class StochasticMetaOptimizer extends StochasticMetaAscent implements Optimizer
 {
-    DMROptimizable mt;
-    int            numBatches;
-    int[]          batchAssignments;    // i.e. which batch each instance belongs to
-    boolean        isConverged;
-    Random         random;
+    Optimizable.ByBatchGradient mt;
+    int                         numBatches;
+    int[]                       batchAssignments; // i.e. which batch each instance belongs to
+    boolean                     isConverged;
+    Random                      random;
 
     
-    public StochasticMetaOptimizer(DMROptimizable mt, int numBatches, Random random)
+    public StochasticMetaOptimizer(Optimizable.ByBatchGradient mt, int numBatches, int numInstances, Random random)
     {
         super(mt);
         
         this.mt               = mt;
         this.isConverged      = false;
         this.numBatches       = numBatches; 
-        this.batchAssignments = new int[mt.trainingList.size()]; 
+        this.batchAssignments = new int[numInstances]; 
         this.random           = random;
         
         assignBatches(this.numBatches, this.batchAssignments);
@@ -98,7 +99,7 @@ public class StochasticMetaOptimizer extends StochasticMetaAscent implements Opt
         return this.isConverged;
     }
 
-    public DMROptimizable getOptimizable()
+    public Optimizable.ByBatchGradient getOptimizable()
     {
         return this.mt;
     }
