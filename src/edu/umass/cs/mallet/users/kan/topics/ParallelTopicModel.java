@@ -50,8 +50,9 @@ import cc.mallet.util.Randoms;
 
 /**
  * Simple parallel threaded implementation of LDA,
- *  following the UCI NIPS paper, with SparseLDA 
- *  sampling scheme and data structure.
+ *  following Newman, Asuncion, Smyth and Welling, Distributed Algorithms for Topic Models
+ *  JMLR (2009), with SparseLDA sampling scheme and data structure from
+ *  Yao, Mimno and McCallum, Efficient Methods for Topic Model Inference on Streaming Document Collections, KDD (2009).
  * 
  * @author David Mimno, Andrew McCallum
  */
@@ -988,7 +989,7 @@ public class ParallelTopicModel implements Serializable {
 	 *  @param max         Print no more than this many topics
 	 */
 	public void printDocumentTopics (PrintWriter out, double threshold, int max)	{
-		out.print ("#doc source topic proportion ...\n");
+	    out.print ("#doc name topic proportion ...\n");
 		int docLen;
 		int[] topicCounts = new int[ numTopics ];
 
@@ -1005,17 +1006,20 @@ public class ParallelTopicModel implements Serializable {
 		for (int doc = 0; doc < data.size(); doc++) {
 			LabelSequence topicSequence = (LabelSequence) data.get(doc).topicSequence;
 			int[] currentDocTopics = topicSequence.getFeatures();
+			
+			StringBuilder builder = new StringBuilder();
 
-			out.print (doc); out.print (' ');
+            builder.append(doc);
+            builder.append("\t");
 
-			if (data.get(doc).instance.getSource() != null) {
-				out.print (data.get(doc).instance.getSource()); 
+            if (data.get(doc).instance.getName() != null) {
+                builder.append(data.get(doc).instance.getName()); 
 			}
 			else {
-				out.print ("null-source");
+			    builder.append("no-name");
 			}
 
-			out.print (' ');
+            builder.append("\t");
 			docLen = currentDocTopics.length;
 
 			// Count up the tokens
@@ -1025,7 +1029,7 @@ public class ParallelTopicModel implements Serializable {
 
 			// And normalize
 			for (int topic = 0; topic < numTopics; topic++) {
-				sortedTopics[topic].set(topic, (float) topicCounts[topic] / docLen);
+                sortedTopics[topic].set(topic, (alpha[topic] + topicCounts[topic]) / (docLen + alphaSum) );
 			}
 			
 			Arrays.sort(sortedTopics);
@@ -1033,10 +1037,10 @@ public class ParallelTopicModel implements Serializable {
 			for (int i = 0; i < max; i++) {
 				if (sortedTopics[i].getWeight() < threshold) { break; }
 				
-				out.print (sortedTopics[i].getID() + " " + 
-						  sortedTopics[i].getWeight() + " ");
+				builder.append(sortedTopics[i].getID() + "\t" + 
+				               sortedTopics[i].getWeight() + "\t");
 			}
-			out.print (" \n");
+			out.println(builder);
 
 			Arrays.fill(topicCounts, 0);
 		}
@@ -1144,18 +1148,23 @@ public class ParallelTopicModel implements Serializable {
 			logLikelihood -= 
 				Dirichlet.logGammaStirling( (beta * numTypes) +
 											tokensPerTopic[ topic ] );
-			if (Double.isNaN(logLikelihood)) {
-				logger.info("after topic " + topic + " " + tokensPerTopic[ topic ]);
-				//System.exit(1);
-				throw new IllegalStateException("log likelihood NaN after topic " + topic + " " + tokensPerTopic[ topic ]);
-			}
+            if (Double.isNaN(logLikelihood)) {
+                logger.info("NaN after topic " + topic + " " + tokensPerTopic[ topic ]);
+                return 0;
+            }
+            else if (Double.isInfinite(logLikelihood)) {
+                logger.info("Infinite value after topic " + topic + " " + tokensPerTopic[ topic ]);
+                return 0;
+            }
 		}
 	
 		if (Double.isNaN(logLikelihood)) {
 			logger.info("at the end");
-            //System.exit(1);
-            throw new IllegalStateException("log likelihood NaN at the end");
 		}
+        else if (Double.isInfinite(logLikelihood)) {
+            logger.info("Infinite value beta " + beta + " * " + numTypes);
+            return 0;
+        }
 
 		return logLikelihood;
 	}
@@ -1290,6 +1299,8 @@ public class ParallelTopicModel implements Serializable {
 		ObjectInputStream ois = new ObjectInputStream (new FileInputStream(f));
 		topicModel = (ParallelTopicModel) ois.readObject();
 		ois.close();
+
+		topicModel.initializeHistograms();
 
 		return topicModel;
 	}

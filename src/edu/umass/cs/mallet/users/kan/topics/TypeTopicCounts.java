@@ -18,6 +18,7 @@ import java.io.PrintWriter;
 import java.io.Serializable;
 import java.util.Arrays;
 import java.util.TreeSet;
+import java.util.logging.Logger;
 
 import cc.mallet.types.Alphabet;
 import cc.mallet.types.Dirichlet;
@@ -25,6 +26,7 @@ import cc.mallet.types.FeatureSequence;
 import cc.mallet.types.IDSorter;
 import cc.mallet.types.Instance;
 import cc.mallet.types.InstanceList;
+import cc.mallet.util.MalletLogger;
 
 
 /**
@@ -37,7 +39,9 @@ import cc.mallet.types.InstanceList;
  **/
 public class TypeTopicCounts implements Serializable {
 
-	// These values are used to encode type/topic counts as
+    protected static Logger logger = MalletLogger.getLogger(TypeTopicCounts.class.getName());
+    
+    // These values are used to encode type/topic counts as
 	//  count/topic pairs in a single int.
 	
     private static final long serialVersionUID = -100L;
@@ -685,11 +689,16 @@ public class TypeTopicCounts implements Serializable {
 				nonZeroTypeTopics++;
 				logLikelihood += Dirichlet.logGammaStirling(beta + count);
 
-				if (Double.isNaN(logLikelihood)) {
-					int topic = topicCounts[index] & topicMask;
-					
-					throw new IllegalStateException("log likelihood is NAN: type = " + type + " topic = " + topic + " count = " + count);
-				}
+                if (Double.isNaN(logLikelihood)) {
+                    int topic = topicCounts[index] & topicMask;
+                    logger.warning("NaN in log likelihood calculation: type = " + type + " topic = " + topic + " count = " + count);
+                    return 0;
+                }
+                else if (Double.isInfinite(logLikelihood)) {
+                    int topic = topicCounts[index] & topicMask;
+                    logger.warning("infinite log likelihood: type = " + type + " topic = " + topic + " count = " + count);
+                    return 0;
+                }
 				index++;
 			}
 		}
