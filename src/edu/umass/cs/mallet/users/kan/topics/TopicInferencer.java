@@ -436,7 +436,7 @@ public class TopicInferencer implements Serializable {
 
     private void readObject (ObjectInputStream in) throws IOException, ClassNotFoundException {
 
-        int version = in.readInt ();
+        @SuppressWarnings("unused") int version = in.readInt ();
 
         alphabet = (Alphabet) in.readObject();
 

@@ -146,9 +146,7 @@ public class MarginalProbEstimator implements Serializable {
 		int[] oneDocTopics = new int[tokenSequence.getLength()];
 		double[] wordProbabilities = new double[tokenSequence.getLength()];
 
-		//int[] currentTypeTopicCounts;
 		int type, oldTopic, newTopic;
-		//double topicWeightsSum;
 		int docLength = tokenSequence.getLength();
 
 		// Keep track of the number of tokens we've examined, not
@@ -170,12 +168,7 @@ public class MarginalProbEstimator implements Serializable {
 		double topicTermMass = 0.0;
 
 		double[] topicTermScores = new double[numTopics];
-		//int[] topicTermIndices;
-		//int[] topicTermValues;
 		int i;
-		//double score;
-
-		//double logLikelihood = 0;
 
 		// All counts are now zero, we are starting completely fresh.
 
@@ -540,7 +533,6 @@ public class MarginalProbEstimator implements Serializable {
 
 	private static final long serialVersionUID = 1;
     private static final int CURRENT_SERIAL_VERSION = 0;
-    //private static final int NULL_INTEGER = -1;
 
     private void writeObject (ObjectOutputStream out) throws IOException {
         out.writeInt (CURRENT_SERIAL_VERSION);
@@ -563,7 +555,7 @@ public class MarginalProbEstimator implements Serializable {
 
 	private void readObject (ObjectInputStream in) throws IOException, ClassNotFoundException {
 
-        int version = in.readInt ();
+        @SuppressWarnings("unused") int version = in.readInt ();
 
         numTopics = in.readInt();
 

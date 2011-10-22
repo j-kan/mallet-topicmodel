@@ -822,7 +822,7 @@ public class ParallelTopicModel implements Serializable {
 
 	public void topicPhraseXMLReport(PrintWriter out, int numWords) {
 		int numTopics = this.getNumTopics();
-		gnu.trove.TObjectIntHashMap<String>[] phrases = new gnu.trove.TObjectIntHashMap[numTopics];
+		@SuppressWarnings("unchecked") gnu.trove.TObjectIntHashMap<String>[] phrases = new gnu.trove.TObjectIntHashMap[numTopics];
 		Alphabet alphabet = this.getAlphabet();
 		
 		// Get counts of phrases
@@ -1230,7 +1230,7 @@ public class ParallelTopicModel implements Serializable {
 		out.writeInt(numThreads);
 	}
 
-	private void readObject (ObjectInputStream in) throws IOException, ClassNotFoundException {
+    private void readObject (ObjectInputStream in) throws IOException, ClassNotFoundException {
 		
 		int version = in.readInt ();
 
@@ -1238,8 +1238,10 @@ public class ParallelTopicModel implements Serializable {
 			throw new InvalidClassException(this.getClass().getName(), 
 					"Expected version " + CURRENT_SERIAL_VERSION + " but found " + version);
 
-		
-		data = (ArrayList<TopicAssignment>) in.readObject ();
+        @SuppressWarnings("unchecked")
+		ArrayList<TopicAssignment> tmpdata = (ArrayList<TopicAssignment>)in.readObject();
+
+		data = tmpdata;
 		alphabet = (Alphabet) in.readObject();
 		topicAlphabet = (LabelAlphabet) in.readObject();
 		

@@ -55,9 +55,9 @@ public class TypeTopicCounts implements Serializable {
     protected int[][]         typeTopicCounts;         // indexed by <feature index, topic index>
     private double[]          topicTermScores;
 
-    /* The number of times each type appears in the corpus */
+    /** The number of times each type appears in the corpus **/
     int[]                     typeTotals;
-    /* The max over typeTotals, used for beta optimization */
+    /** The max over typeTotals, used for beta optimization **/
     int                       maxTypeCount;
 
     TopicProgressLogger       topicLogger;
@@ -527,7 +527,8 @@ public class TypeTopicCounts implements Serializable {
 	 */
 	public TreeSet<IDSorter>[] getSortedWords() {
 		
-		TreeSet<IDSorter>[] topicSortedWords = (TreeSet<IDSorter>[]) new TreeSet[ numTopics ];
+		@SuppressWarnings("unchecked")
+        TreeSet<IDSorter>[] topicSortedWords = (TreeSet<IDSorter>[]) new TreeSet[ numTopics ];
 
 		// Initialize the tree sets
 		for (int topic = 0; topic < numTopics; topic++) {
