@@ -100,20 +100,45 @@ public class MarginalProbEstimator implements Serializable {
 		logger.info("Topic Evaluator: " + numTopics + " topics");
 	}
 
+    public void setRandomSeed(int seed) {
+        this.random = new Randoms(seed);
+    }
+
 	public int[] getTokensPerTopic() { return tokensPerTopic; }
 	//public int[][] getTypeTopicCounts() { return typeTopicCounts; }
 
 	public double evaluateLeftToRight (InstanceList testing, int numParticles, boolean usingResampling,
 									   PrintStream docProbabilityStream) {
-		random = new Randoms();
+		//random = new Randoms();
+        double totalLogLikelihood = 0;
 
-		double logNumParticles = Math.log(numParticles);
-		double totalLogLikelihood = 0;
+        double[] docLogLikelihoods = evaluateLeftToRight(testing, numParticles, usingResampling);
+        
+        for (double docLogLikelihood : docLogLikelihoods)
+        {
+            if (docProbabilityStream != null) {
+                docProbabilityStream.println(docLogLikelihood);
+            }
+            totalLogLikelihood += docLogLikelihood;
+        }
+    
+        return totalLogLikelihood;
+	}
+	
+
+    public double[] evaluateLeftToRight (InstanceList testing, int numParticles, boolean usingResampling) {
+
+		final double logNumParticles = Math.log(numParticles);
+
+		double[] docLogLikelihoods = new double[testing.size()];
+
+        int i = 0;
+        
 		for (Instance instance : testing) {
 			
 			FeatureSequence tokenSequence = (FeatureSequence) instance.getData();
 
-			double docLogLikelihood = 0;
+			docLogLikelihoods[i] = 0;
 
 			double[][] particleProbabilities = new double[ numParticles ][];
 			for (int particle = 0; particle < numParticles; particle++) {
@@ -128,17 +153,12 @@ public class MarginalProbEstimator implements Serializable {
 				}
 
 				if (sum > 0.0) { 
-					docLogLikelihood += Math.log(sum) - logNumParticles;
+				    docLogLikelihoods[i] += Math.log(sum) - logNumParticles;
 				}
 			}
-
-			if (docProbabilityStream != null) {
-				docProbabilityStream.println(docLogLikelihood);
-			}
-			totalLogLikelihood += docLogLikelihood;
+			++i;
 		}
-
-		return totalLogLikelihood;
+		return docLogLikelihoods;
 	}
 	
 	protected double[] leftToRight (FeatureSequence tokenSequence, boolean usingResampling) {
