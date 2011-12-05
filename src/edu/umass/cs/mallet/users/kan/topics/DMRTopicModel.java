@@ -9,9 +9,12 @@ package edu.umass.cs.mallet.users.kan.topics;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.logging.Logger;
 
 import cc.mallet.classify.MaxEnt;
 import cc.mallet.optimize.LimitedMemoryBFGS;
@@ -19,6 +22,7 @@ import cc.mallet.optimize.OptimizationException;
 import cc.mallet.pipe.Noop;
 import cc.mallet.pipe.Pipe;
 import cc.mallet.topics.DMROptimizable;
+import cc.mallet.types.Alphabet;
 import cc.mallet.types.FeatureCounter;
 import cc.mallet.types.FeatureVector;
 import cc.mallet.types.Instance;
@@ -31,14 +35,15 @@ public class DMRTopicModel extends ParallelTopicModel {
 
     private static final long serialVersionUID = 1;
 	
-	MaxEnt dmrParameters = null;
+	MaxEnt dmrParameters;
     int numFeatures;
     int defaultFeatureIndex;
 
     Pipe parameterPipe = null;
     
-	double[][] alphaCache;
-    double[] alphaSumCache;
+    //	double[][] alphaCache;
+    //  double[] alphaSumCache;
+            // these don't seem to be used....
 
 	public DMRTopicModel(int numberOfTopics) {
 		super(numberOfTopics);
@@ -53,20 +58,10 @@ public class DMRTopicModel extends ParallelTopicModel {
         numFeatures = data.get(0).instance.getTargetAlphabet().size() + 1;
         defaultFeatureIndex = numFeatures - 1;
 
-		int numDocs = data.size(); // TODO consider beginning by sub-sampling?
+//		int numDocs = data.size(); // TODO consider beginning by sub-sampling?
 
-		alphaCache    = new double[numDocs][numTopics];
-        alphaSumCache = new double[numDocs];
-        
-        // Create a "fake" pipe with the features in the data and 
-        //  a trove int-int hashmap of topic counts in the target.
-        
-        if (parameterPipe == null) {
-            parameterPipe = new Noop();
-
-            parameterPipe.setDataAlphabet(data.get(0).instance.getTargetAlphabet());
-            parameterPipe.setTargetAlphabet(topicAlphabet);
-        }
+//		alphaCache    = new double[numDocs][numTopics];
+//      alphaSumCache = new double[numDocs];
 	}
 	
 	@Override
@@ -108,6 +103,16 @@ public class DMRTopicModel extends ParallelTopicModel {
 	@Override
 	public void optimizeAlpha() {
 
+        // Create a "fake" pipe with the features in the data and 
+        //  a trove int-int hashmap of topic counts in the target.
+        
+        if (parameterPipe == null) {
+            parameterPipe = new Noop();
+
+            parameterPipe.setDataAlphabet(data.get(0).instance.getTargetAlphabet());
+            parameterPipe.setTargetAlphabet(topicAlphabet);
+        }
+        
         InstanceList parameterInstances = new InstanceList(parameterPipe);
 
         if (dmrParameters == null) {
@@ -152,21 +157,21 @@ public class DMRTopicModel extends ParallelTopicModel {
 		}
         dmrParameters = optimizable.getClassifier();
 
-        cacheAlphas();
+//        cacheAlphas();
     }
 
 
-	private void cacheAlphas() {
-		
-		for (int doc=0; doc < data.size(); doc++) {
-            Instance instance = data.get(doc).instance;
-            //FeatureSequence tokens = (FeatureSequence) instance.getData();
-            if (instance.getTarget() == null) { continue; }
-            //int numTokens = tokens.getLength();
-
-            alphaSumCache[doc] = setAlphasFromDocFeatures(alphaCache[doc], instance);
-        }
-	}
+//	private void cacheAlphas() {
+//		
+//		for (int doc=0; doc < data.size(); doc++) {
+//            Instance instance = data.get(doc).instance;
+//            //FeatureSequence tokens = (FeatureSequence) instance.getData();
+//            if (instance.getTarget() == null) { continue; }
+//            //int numTokens = tokens.getLength();
+//
+//            alphaSumCache[doc] = setAlphasFromDocFeatures(alphaCache[doc], instance, this.dmrParameters, this.numFeatures, this.defaultFeatureIndex);
+//        }
+//	}
 	
 	/**
 	 *  Set alpha based on features in an instance
@@ -175,17 +180,17 @@ public class DMRTopicModel extends ParallelTopicModel {
 	 *  @param instance		the instance from which to read the features
 	 *  @return the sum of the resulting alphas
 	 */
-	double setAlphasFromDocFeatures(double[] alpha, Instance instance) {
+	static double setAlphasFromDocFeatures(double[] alpha, Instance instance, MaxEnt dmrParameters, int numFeatures, int defaultFeatureIndex) {
 	    
         // we can't use the standard score functions from MaxEnt,
         //  since our features are currently in the Target.
         FeatureVector features = (FeatureVector) instance.getTarget();
-        if (features == null) { return setAlphasWithoutDocFeatures(alpha); }
+        if (features == null) { return setAlphasWithoutDocFeatures(alpha, dmrParameters, numFeatures, defaultFeatureIndex); }
         
         double[] parameters = dmrParameters.getParameters();
         double   alphaSum   = 0.0;
         
-        for (int topic = 0; topic < numTopics; topic++) {
+        for (int topic = 0; topic < alpha.length; topic++) {
             alpha[topic] = parameters[topic*numFeatures + defaultFeatureIndex]
                 + MatrixOps.rowDotProduct (parameters,
                                            numFeatures,
@@ -205,13 +210,13 @@ public class DMRTopicModel extends ParallelTopicModel {
 	 *  @param alpha		the array of alpha values to set (out parameter)
 	 *  @return the sum of the resulting alphas
 	 */
-	double setAlphasWithoutDocFeatures(double[] alpha) {
+	static double setAlphasWithoutDocFeatures(double[] alpha, MaxEnt dmrParameters, int numFeatures, int defaultFeatureIndex) {
 
         double[] parameters = dmrParameters.getParameters();
         double   alphaSum   = 0.0;
 
         // Use only the default features to set the topic prior (use no document features)
-        for (int topic=0; topic < numTopics; topic++) {
+        for (int topic=0; topic < alpha.length; topic++) {
             alpha[topic] = Math.exp( parameters[ (topic * numFeatures) + defaultFeatureIndex ] );
             alphaSum += alpha[topic];
         }
@@ -219,7 +224,7 @@ public class DMRTopicModel extends ParallelTopicModel {
     }
 	
 	public void printTopWords (PrintStream out, int numWords, boolean usingNewLines) {
-		if (dmrParameters != null) { setAlphasWithoutDocFeatures(alpha); }
+		if (dmrParameters != null) { setAlphasWithoutDocFeatures(alpha, dmrParameters, numFeatures, defaultFeatureIndex); }
 		super.printTopWords(out, numWords, usingNewLines);
 	}
 
@@ -230,6 +235,19 @@ public class DMRTopicModel extends ParallelTopicModel {
 			out.close();
 		}
 	}
+	
+	
+    private void writeObject (ObjectOutputStream out) throws IOException {
+        out.writeObject(this.dmrParameters);
+        out.writeInt(this.numFeatures);
+        out.writeInt(this.defaultFeatureIndex);
+    }
+
+    private void readObject (ObjectInputStream in) throws IOException, ClassNotFoundException {
+        this.dmrParameters = (MaxEnt) in.readObject();
+        this.numFeatures            = in.readInt();
+        this.defaultFeatureIndex    = in.readInt();
+    }
 
 	public MaxEnt getRegressionParameters() { return dmrParameters; }
 	
@@ -260,10 +278,139 @@ public class DMRTopicModel extends ParallelTopicModel {
 			
 			if (dmrParameters != null) {
 				// set the alphas for each doc before sampling
-				setAlphasFromDocFeatures(this.alpha, document.instance);
-				initSmoothingOnlyMassAndCachedCoefficients();
+				setAlphasFromDocFeatures(this.alpha, document.instance, dmrParameters, numFeatures, defaultFeatureIndex);
+				this.smoothingOnlyMass = 
+				    initSmoothingOnlyMassAndCachedCoefficients(this.cachedCoefficients, 
+			            this.alpha, this.beta, this.betaSum, this.tokensPerTopic);
 			}
 			super.sampleTopicsForOneDoc(document, readjustTopicsAndStats);
 		}
+	}
+	
+	
+	public static class DMRTopicInferencer extends TopicInferencer
+	{
+        private static final long serialVersionUID = 1L;
+        
+        MaxEnt                    dmrParameters;
+        int                       numFeatures;
+        int                       defaultFeatureIndex;
+
+        public DMRTopicInferencer(
+                TypeTopicCounts typeTopicCounts, int[] tokensPerTopic, Alphabet alphabet, 
+                double[] alpha, double beta, double betaSum, 
+                final MaxEnt dmrParameters, final int numFeatures, final int defaultFeatureIndex)
+        {
+            super(typeTopicCounts, tokensPerTopic, alphabet, alpha, beta, betaSum);
+            
+            this.dmrParameters = dmrParameters;
+            this.numFeatures = numFeatures;
+            this.defaultFeatureIndex = defaultFeatureIndex;
+        }
+        
+        /**
+             @see edu.umass.cs.mallet.users.kan.topics.TopicInferencer#getSampledDistribution(cc.mallet.types.Instance, int, int, int)
+         **/
+        @Override
+        public double[] getSampledDistribution(Instance instance, int numIterations, int thinning, int burnIn)
+        {
+            if (this.dmrParameters != null)
+            {
+                setAlphasFromDocFeatures(this.alpha, instance, this.dmrParameters, this.numFeatures, this.defaultFeatureIndex);
+                this.smoothingOnlyMass = 
+                    WorkerRunnable.initSmoothingOnlyMassAndCachedCoefficients(this.cachedCoefficients, 
+                        this.alpha, this.beta, this.betaSum, this.tokensPerTopic);
+            }            
+            return super.getSampledDistribution(instance, numIterations, thinning, burnIn);
+        }
+        
+        private void writeObject (ObjectOutputStream out) throws IOException {
+            out.writeObject(this.dmrParameters);
+            out.writeInt(this.numFeatures);
+            out.writeInt(this.defaultFeatureIndex);
+        }
+
+        private void readObject (ObjectInputStream in) throws IOException, ClassNotFoundException {
+            this.dmrParameters = (MaxEnt) in.readObject();
+            this.numFeatures            = in.readInt();
+            this.defaultFeatureIndex    = in.readInt();
+        }
+	}
+	
+	/**
+	     @see edu.umass.cs.mallet.users.kan.topics.ParallelTopicModel#getInferencer()
+	 **/
+	@Override
+	public TopicInferencer getInferencer()
+	{
+        return new DMRTopicInferencer(typeTopicCounts, tokensPerTopic,
+                data.get(0).instance.getDataAlphabet(),
+                alpha, beta, betaSum, 
+                this.dmrParameters, this.numFeatures, this.defaultFeatureIndex);
+	}
+	
+	
+	
+    public static class DMRProbEstimator extends MarginalProbEstimator
+    {
+        private static final long serialVersionUID = 1L;
+        
+        MaxEnt                    dmrParameters;
+        int                       numFeatures;
+        int                       defaultFeatureIndex;
+
+        
+        public DMRProbEstimator(int numTopics, double[] alpha, double alphaSum, double beta,
+                TypeTopicCounts typeTopicCounts, int[] tokensPerTopic, Logger logger,
+                final MaxEnt dmrParameters, final int numFeatures, final int defaultFeatureIndex)
+        {
+            super(numTopics, alpha, alphaSum, beta, typeTopicCounts, tokensPerTopic, logger);
+            
+            this.dmrParameters = dmrParameters;
+            this.numFeatures = numFeatures;
+            this.defaultFeatureIndex = defaultFeatureIndex;
+        }
+
+        
+        /**
+             @see edu.umass.cs.mallet.users.kan.topics.MarginalProbEstimator#evaluateLeftToRight(cc.mallet.types.Instance, boolean, double, double[][])
+         **/
+        @Override
+        protected double evaluateLeftToRight(Instance instance, boolean usingResampling, double logNumParticles,
+                double[][] particleProbabilities)
+        {
+            if (this.dmrParameters != null)
+            {
+                setAlphasFromDocFeatures(this.alpha, instance, this.dmrParameters, this.numFeatures, this.defaultFeatureIndex);
+                this.smoothingOnlyMass = 
+                    WorkerRunnable.initSmoothingOnlyMassAndCachedCoefficients(this.cachedCoefficients, 
+                        this.alpha, this.beta, this.betaSum, this.tokensPerTopic);
+            }            
+            return super.evaluateLeftToRight(instance, usingResampling, logNumParticles, particleProbabilities);
+        }
+
+        private void writeObject (ObjectOutputStream out) throws IOException {
+            out.writeObject(this.dmrParameters);
+            out.writeInt(this.numFeatures);
+            out.writeInt(this.defaultFeatureIndex);
+        }
+
+        private void readObject (ObjectInputStream in) throws IOException, ClassNotFoundException {
+            this.dmrParameters = (MaxEnt) in.readObject();
+            this.numFeatures            = in.readInt();
+            this.defaultFeatureIndex    = in.readInt();
+        }
+    }
+
+	
+	/**
+	     @see edu.umass.cs.mallet.users.kan.topics.ParallelTopicModel#getProbEstimator()
+	 **/
+	@Override
+	public MarginalProbEstimator getProbEstimator()
+	{
+        return new DMRProbEstimator(numTopics, alpha, alphaSum, beta,
+                                    typeTopicCounts, tokensPerTopic, logger, 
+                                    dmrParameters, numFeatures, defaultFeatureIndex);
 	}
 }

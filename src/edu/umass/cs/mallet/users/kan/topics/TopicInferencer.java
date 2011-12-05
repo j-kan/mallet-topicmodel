@@ -22,7 +22,7 @@ public class TopicInferencer implements Serializable {
     
     protected Randoms random = null;
     
-    double smoothingOnlyMass = 0.0;
+    double smoothingOnlyMass;
     double[] cachedCoefficients;
     
     public TopicInferencer (TypeTopicCounts typeTopicCounts, int[] tokensPerTopic, Alphabet alphabet,
@@ -40,16 +40,18 @@ public class TopicInferencer implements Serializable {
         this.beta = beta;
         this.betaSum = betaSum;
 
-        cachedCoefficients = new double[numTopics];
+        this.cachedCoefficients = new double[numTopics];
+        this.smoothingOnlyMass = 
+            WorkerRunnable.initSmoothingOnlyMassAndCachedCoefficients(
+                this.cachedCoefficients, this.alpha, this.beta, this.betaSum, this.tokensPerTopic);
         
-        for (int topic=0; topic < numTopics; topic++) {
-            smoothingOnlyMass += alpha[topic] * beta / (tokensPerTopic[topic] + betaSum);
-            cachedCoefficients[topic] =  alpha[topic] / (tokensPerTopic[topic] + betaSum);
-        }
-
         random = new Randoms();
     }
 
+    public void setRandom(Randoms random) {
+        this.random = random;
+    }
+    
     public void setRandomSeed(int seed) {
         random = new Randoms(seed);
     }

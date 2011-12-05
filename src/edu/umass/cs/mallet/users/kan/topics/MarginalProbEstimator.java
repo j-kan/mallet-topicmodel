@@ -84,20 +84,18 @@ public class MarginalProbEstimator implements Serializable {
 		cachedCoefficients = new double[ numTopics ];
 
 		// Initialize the smoothing-only sampling bucket
-		smoothingOnlyMass = 0;
 		
 		// Initialize the cached coefficients, using only smoothing.
 		//  These values will be selectively replaced in documents with
 		//  non-zero counts in particular topics.
 		
-		for (int topic=0; topic < numTopics; topic++) {
-			smoothingOnlyMass += alpha[topic] * beta / (tokensPerTopic[topic] + betaSum);
-			cachedCoefficients[topic] =  alpha[topic] / (tokensPerTopic[topic] + betaSum);
-		}
+		this.smoothingOnlyMass = 
+		    WorkerRunnable.initSmoothingOnlyMassAndCachedCoefficients(this.cachedCoefficients, 
+                this.alpha, this.beta, this.betaSum, this.tokensPerTopic);
 		
 		this.logger = logger;
 		
-		logger.info("Topic Evaluator: " + numTopics + " topics");
+		//logger.info("Topic Evaluator: " + numTopics + " topics");
 	}
 
     public void setRandomSeed(int seed) {
@@ -130,36 +128,48 @@ public class MarginalProbEstimator implements Serializable {
 
 		final double logNumParticles = Math.log(numParticles);
 
-		double[] docLogLikelihoods = new double[testing.size()];
+		double[]   docLogLikelihoods = new double[testing.size()];
+        double[][] particleProbabilities = new double[ numParticles ][];
 
         int i = 0;
         
 		for (Instance instance : testing) {
-			
-			FeatureSequence tokenSequence = (FeatureSequence) instance.getData();
-
-			docLogLikelihoods[i] = 0;
-
-			double[][] particleProbabilities = new double[ numParticles ][];
-			for (int particle = 0; particle < numParticles; particle++) {
-				particleProbabilities[particle] =
-					leftToRight(tokenSequence, usingResampling);
-			}
-
-			for (int position = 0; position < particleProbabilities[0].length; position++) {
-				double sum = 0;
-				for (int particle = 0; particle < numParticles; particle++) {
-					sum += particleProbabilities[particle][position];
-				}
-
-				if (sum > 0.0) { 
-				    docLogLikelihoods[i] += Math.log(sum) - logNumParticles;
-				}
-			}
-			++i;
+		    docLogLikelihoods[i++] = evaluateLeftToRight(instance, usingResampling, logNumParticles, particleProbabilities);
 		}
 		return docLogLikelihoods;
 	}
+
+    /**
+         @param instance
+         @param usingResampling
+         @param logNumParticles
+         @param particleProbabilities
+         @return
+     **/
+    protected double evaluateLeftToRight(Instance instance, boolean usingResampling, final double logNumParticles,
+            double[][] particleProbabilities)
+    {
+        FeatureSequence tokenSequence = (FeatureSequence) instance.getData();
+
+        double docLogLikelihood = 0;
+
+        for (int particle = 0; particle < particleProbabilities.length; particle++) {
+            particleProbabilities[particle] = 
+                leftToRight(tokenSequence, usingResampling);
+        }
+
+        for (int position = 0; position < particleProbabilities[0].length; position++) {
+            double sum = 0;
+            for (int particle = 0; particle < particleProbabilities.length; particle++) {
+                sum += particleProbabilities[particle][position];
+            }
+
+            if (sum > 0.0) {
+                docLogLikelihood += Math.log(sum) - logNumParticles;
+            }
+        }
+        return docLogLikelihood;
+    }
 	
 	protected double[] leftToRight (FeatureSequence tokenSequence, boolean usingResampling) {
 

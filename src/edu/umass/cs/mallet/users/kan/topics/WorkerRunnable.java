@@ -83,7 +83,7 @@ public class WorkerRunnable implements Runnable {
 		this.startDoc = startDoc;
 		this.numDocs = numDocs;
 
-		cachedCoefficients = new double[ numTopics ];
+		this.cachedCoefficients = new double[ numTopics ];
 
 		System.err.print("WorkerRunnable Thread: ");
 		System.err.println(this.typeTopicCounts.getConfigSummary());
@@ -198,9 +198,12 @@ public class WorkerRunnable implements Runnable {
 	}
 
 	protected void prepareToSample() {
-		initSmoothingOnlyMassAndCachedCoefficients();
+	    this.smoothingOnlyMass = 
+	        initSmoothingOnlyMassAndCachedCoefficients(
+	                cachedCoefficients, alpha, beta, betaSum, tokensPerTopic);
 	}
 
+	
 	/**
 	     <pre>
                                          alpha[t] * beta
@@ -212,21 +215,31 @@ public class WorkerRunnable implements Runnable {
                                      t   N[t] + sum(beta)
 	                          
          </pre>
+
+	     @param cachedCoefficients     out param where coefficient results are returned
+	     @param alpha
+	     @param beta
+	     @param betaSum
+	     @param tokensPerTopic
+	     @return the new value for the smoothing only mass
 	 **/
-	protected void initSmoothingOnlyMassAndCachedCoefficients() {
+	protected static double initSmoothingOnlyMassAndCachedCoefficients(
+	        double[] cachedCoefficients, 
+	        final double[] alpha, double beta, double betaSum, final int[] tokensPerTopic) {
 	    
 		// Initialize the smoothing-only sampling bucket
 	    //     \sum_{t}\frac{\alpha_t \beta}{n_t + \sum\beta}
-		smoothingOnlyMass = 0;
+	    double smoothingOnlyMass = 0.0;
 		
 		// Initialize the cached coefficients, using only smoothing.
 		//  These values will be selectively replaced in documents with
 		//  non-zero counts in particular topics.
 		
-		for (int topic=0; topic < numTopics; topic++) {
+		for (int topic=0; topic < alpha.length; topic++) {
 		    smoothingOnlyMass += alpha[topic] * beta / (tokensPerTopic[topic] + betaSum);
 			cachedCoefficients[topic] =  alpha[topic] / (tokensPerTopic[topic] + betaSum); // this is the cached coeff value for zero-count topics
 		}
+		return smoothingOnlyMass;
 	}
 	
 	protected void sampleTopicsForOneDoc(TopicAssignment document, boolean readjustTopicsAndStats /* currently ignored */) {
